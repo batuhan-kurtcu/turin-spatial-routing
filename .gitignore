@@ -16,3 +16,9 @@ venv/
 # System files
 .DS_Store
 Thumbs.db
+
+nord-ovest-latest.osm.pbf
+cache/
+*.pyc
+__pycache__/
+.env
