@@ -1,0 +1,20 @@
+{
+  "filters": [
+    "w/building",
+    "w/building:levels",
+    "w/height",
+    "w/highway",
+    "w/foot",
+    "w/footway",
+    "w/pedestrian",
+    "w/path",
+    "w/steps",
+    "w/sidewalk",
+    "w/crossing",
+    "w/amenity",
+    "w/landuse",
+    "w/leisure",
+    "w/natural",
+    "w/waterway"
+  ]
+}
