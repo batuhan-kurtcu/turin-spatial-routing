@@ -1,0 +1,18 @@
+# Environment variables (secrets)
+.env
+.env.local
+
+# Database data & local dumps
+*.sql
+*.tar
+
+# Python runtime & caches
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# System files
+.DS_Store
+Thumbs.db
