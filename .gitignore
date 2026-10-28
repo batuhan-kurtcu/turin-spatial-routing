@@ -20,5 +20,19 @@ Thumbs.db
 nord-ovest-latest.osm.pbf
 cache/
 *.pyc
-__pycache__/
+
 .env
+
+
+*.html
+!frontend/*.html   # Preserves real web app UI templates if you put them in frontend/
+
+
+*.pbf
+*.geojson
+*.gpkg
+
+__pycache__/
+*.pyc
+venv/
+.venv/
