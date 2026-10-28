@@ -1,1 +1,65 @@
-
+{
+  "monuments": [
+    {
+      "name": "Mole Antonelliana",
+      "category": "monument",
+      "size_category": "large",
+      "base_score": 5.0,
+      "lat": 45.0689,
+      "lon": 7.6931
+    },
+    {
+      "name": "Palazzo Madama",
+      "category": "historic_building",
+      "size_category": "large",
+      "base_score": 4.8,
+      "lat": 45.0709,
+      "lon": 7.6857
+    },
+    {
+      "name": "Palazzo Reale",
+      "category": "historic_building",
+      "size_category": "large",
+      "base_score": 4.8,
+      "lat": 45.0722,
+      "lon": 7.6860
+    },
+    {
+      "name": "Galleria Subalpina",
+      "category": "arcade",
+      "size_category": "medium",
+      "base_score": 4.6,
+      "lat": 45.0694,
+      "lon": 7.6860
+    },
+    {
+      "name": "Galleria San Federico",
+      "category": "arcade",
+      "size_category": "medium",
+      "base_score": 4.5,
+      "lat": 45.0681,
+      "lon": 7.6828
+    },
+    {
+      "name": "Monumento a Emanuele Filiberto",
+      "category": "statue",
+      "size_category": "small",
+      "base_score": 3.8,
+      "lat": 45.0664,
+      "lon": 7.6825
+    }
+  ],
+  "featured_streets": {
+    "Via Po": 4.8,
+    "Via Roma": 4.7,
+    "Via Lagrange": 4.5,
+    "Via Carlo Alberto": 4.4,
+    "Via Giuseppe Garibaldi": 4.2
+  },
+  "featured_piazzas": [
+    "Piazza Castello",
+    "Piazza San Carlo",
+    "Piazza Vittorio Veneto",
+    "Piazza Carignano"
+  ]
+}
