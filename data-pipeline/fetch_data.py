@@ -1,29 +1,25 @@
+import os
 import osmnx as ox
+from pyrosm import OSM
 
-# Define bounding box for Turin
-# Note: OSMnx 1.x vs 2.x uses bbox parameter order or bbox tuple.
-# For OSMnx v2.0+: bbox=(west, south, east, north)
-# For older OSMnx: bbox=(north, south, east, west)
-north, south, east, west = 45.12, 45.00, 7.75, 7.57
+# 1. Paths
+pbf_path = "nord-ovest-latest.osm.pbf"
+output_graphml = os.path.join("data", "turin_raw.graphml")
 
-# 1. Fetch 2.5D visual layers
-building_tags = {
-    "building": True,
-    "building:levels": True,
-    "height": True,
-    "landuse": True,
-    "leisure": True,
-    "waterway": True,
-    "amenity": True
-}
+# 2. Define Turin Bounding Box [min_lon, min_lat, max_lon, max_lat]
+bbox_turin = [7.57, 45.00, 7.75, 45.12]
 
-gdf_buildings = ox.features_from_bbox(
-    bbox=(north, south, east, west),
-    tags=building_tags
-)
+print("Extracting Turin street network from regional PBF...")
+osm = OSM(pbf_path, bounding_box=bbox_turin)
 
-# 2. Fetch routing network (automatically grabs all footways/paths)
-G_walk = ox.graph_from_bbox(
-    bbox=(north, south, east, west),
-    network_type="walk"
-)
+# 3. Extract walking network nodes and edges
+nodes, edges = osm.get_network(network_type="walking", nodes=True)
+
+# 4. Convert to NetworkX graph
+G = osm.to_graph(nodes, edges, graph_type="networkx")
+
+# 5. Save raw graph locally
+os.makedirs("data", exist_ok=True)
+ox.save_graphml(G, output_graphml)
+
+print(f"Extraction complete! Saved raw Turin graph to: {output_graphml}")
