@@ -1,0 +1,6 @@
+folium==0.20.0
+geopandas==1.2.0
+networkx==3.7
+numpy==2.5.4
+osmnx==2.1.1
+pyrosm==0.26.0
