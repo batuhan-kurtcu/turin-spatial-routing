@@ -23,13 +23,17 @@ CREATE TABLE IF NOT EXISTS featured_piazzas (
 );
 
 -- Seed Data
-INSERT INTO monuments (name, category, size_category, base_score, location) VALUES
-('Mole Antonelliana', 'monument', 'large', 5.0, ST_SetSRID(ST_MakePoint(7.6931, 45.0689), 4326)),
-('Palazzo Madama', 'historic_building', 'large', 4.8, ST_SetSRID(ST_MakePoint(7.6857, 45.0709), 4326)),
-('Palazzo Reale', 'historic_building', 'large', 4.8, ST_SetSRID(ST_MakePoint(7.6860, 45.0722), 4326)),
-('Galleria Subalpina', 'arcade', 'medium', 4.6, ST_SetSRID(ST_MakePoint(7.6860, 45.0694), 4326)),
-('Galleria San Federico', 'arcade', 'medium', 4.5, ST_SetSRID(ST_MakePoint(7.6828, 45.0681), 4326)),
-('Monumento a Emanuele Filiberto', 'statue', 'small', 3.8, ST_SetSRID(ST_MakePoint(7.6825, 45.0664), 4326))
+-- used EWKT syntax as we its the standard dbeaver syntax
+INSERT INTO public.monuments ("name",category,size_category,base_score,"location") VALUES
+	 ('Mole Antonelliana','monument','large',5.0,'SRID=4326;POINT (7.6931 45.0689)'::public.geometry),
+	 ('Palazzo Madama','historic_building','large',4.8,'SRID=4326;POINT (7.6857 45.0709)'::public.geometry),
+	 ('Palazzo Reale','historic_building','large',4.8,'SRID=4326;POINT (7.686 45.0722)'::public.geometry),
+	 ('Galleria San Federico','arcade','medium',4.5,'SRID=4326;POINT (7.6828 45.0681)'::public.geometry),
+	 ('Arco monumentale all''Arma di Artiglieria ','statue','small',3.8,'SRID=4326;POINT (7.69058 45.058284)'::public.geometry),
+	 ('Castello del Valentino','castle','large',5.0,'SRID=4326;POINT (7.686911 45.054053)'::public.geometry),
+	 ('Ponte Umberto I','bridge','large',4.5,'SRID=4326;POINT (7.692007 45.058032)'::public.geometry),
+	 ('Galleria Subalpina','arcade','medium',5.0,'SRID=4326;POINT (7.686 45.0694)'::public.geometry),
+	 ('Monumento a Emanuele Filiberto','statue','small',5.0,'SRID=4326;POINT (7.6825 45.0664)'::public.geometry);
 ON CONFLICT DO NOTHING;
 
 INSERT INTO featured_streets (name, score) VALUES
@@ -46,3 +50,5 @@ INSERT INTO featured_piazzas (name) VALUES
 ('Piazza Vittorio Veneto'),
 ('Piazza Carignano')
 ON CONFLICT (name) DO NOTHING;
+
+
