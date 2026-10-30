@@ -1,4 +1,5 @@
 import os
+import webbrowser
 import folium
 import osmnx as ox
 from pyrosm import OSM
@@ -7,7 +8,6 @@ from compute_scenic_scores import compute_graph_scenic_scores
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PBF_PATH = os.path.join(BASE_DIR, "nord-ovest-latest.osm.pbf")
-CONFIG_PATH = os.path.join(BASE_DIR, "data", "landmarks.json")
 BBOX_PYROSM = [7.6650, 45.0580, 7.6980, 45.0800]
 
 #Note: everystep will be printed to inform us the specific point where the problem occurs
@@ -22,7 +22,6 @@ def get_score_color(score: float) -> str:
         return "#3498DB"   
     return  "#BDC3C7"  
       
-
 
 
 def generate_inspection_map():
@@ -65,7 +64,7 @@ def generate_inspection_map():
     )
 
     print("7. Computing 1.0 - 5.0 scenic scores using compute_scenic_scores.py...")
-    G_scored = compute_graph_scenic_scores(G_consolidated, CONFIG_PATH)
+    G_scored = compute_graph_scenic_scores(G_consolidated)
 
     print("8. Reprojecting back to WGS84 for map display...")
     G_latlon = ox.project_graph(G_scored, to_crs="EPSG:4326")
@@ -83,7 +82,9 @@ def generate_inspection_map():
 
 
     #discarding duplicate entries
-    edges_unique = edges_simple.reset_index().drop_duplicates(subset=["u", "v"])
+    edges_unique = edges_simple.reset_index()
+    if "u" in edges_unique.columns and "v" in edges_unique.columns:
+        edges_unique = edges_unique.drop_duplicates(subset=["u", "v"])
 
     print("9. Building Folium map...")
     m = folium.Map(location=[45.0690, 7.6815], zoom_start=15, tiles="OpenStreetMap")
@@ -105,29 +106,15 @@ def generate_inspection_map():
     for _, node in nodes_simple.iterrows():
         folium.CircleMarker(
             location=[node.geometry.y, node.geometry.x],
-            radius=2.0,
-            color="#e74c3c",
-            fill=True,
-            fill_color="#e74c3c",
-            fill_opacity=0.7,
-            tooltip=f"Node ID: {node.get('osmid', 'N/A')}",
-        ).add_to(m)
-
-   
-    
-    
-    for _, node in nodes_simple.iterrows():
-        folium.CircleMarker(
-            location=[node.geometry.y, node.geometry.x],
             radius=1.5,
             color="#e74c3c",
             fill=True,
             fill_color="#e74c3c",
-            fill_opacity=0.5,
+            fill_opacity=0.6,
             tooltip=f"Node ID: {node.get('osmid', 'N/A')}",
         ).add_to(m)
 
-    # Add visual color key legend to the map
+    #adding visual color key legend to the map
     legend_html = """
      <div style="position: fixed; bottom: 30px; left: 30px; width: 190px; height: 135px; 
                  border:2px solid grey; z-index:9999; font-size:13px; background-color:white;
@@ -145,6 +132,10 @@ def generate_inspection_map():
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     m.save(output_path)
     print(f"Clean consolidated inspection map saved to: {output_path}")
+
+    #opening local server URL directly
+    #make sure to start:  python -m http.server 8000 on another terminal
+    webbrowser.open("http://localhost:8000/data/turin_edges_inspector.html")
 
 
 if __name__ == "__main__":
