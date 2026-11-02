@@ -2,41 +2,42 @@ import os
 import osmnx as ox
 from pyrosm import OSM
 
-# building a path to our local .pbf file directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PBF_PATH = os.path.join(BASE_DIR, "nord-ovest-latest.osm.pbf")
+LOCAL_CRS = "EPSG:32632"
+BBOX_PYROSM = [7.6650, 45.0580, 7.6980, 45.0800]  # Turin Centro Bounding Box
 
-#current .pbf file has the general north-west italy map which is around .566 gb
-#we aim to cut it down to striclty the centro area of Turin for now (also includes small adjacent areas)
 
+def extract_turin_graph():
+    """Extracts and projects walking network graph from local .pbf file."""
+    if not os.path.exists(PBF_PATH):
+        raise FileNotFoundError(
+            f"[CRITICAL] {PBF_PATH} not found in root directory!"
+        )
 
-LOCAL_CRS = "EPSG:32632"  # italian/european metric system
-BBOX_PYROSM = [7.6650, 45.0580, 7.6980, 45.0800]  # [min_lon, min_lat, max_lon, max_lat]
-
-# 2. route + pedesterian path extraction
-if not os.path.exists(PBF_PATH):
-    print(f"Error: {PBF_PATH} not found in root directory!")
-else:
-    print("Reading local .pbf file and clipping to Turin Centro...")
+    print("Reading local nord-ovest-latest.osm.pbf and clipping to Turin Centro...")
     osm = OSM(PBF_PATH, bounding_box=BBOX_PYROSM)
 
-    # extracting walking network as GeoDataFrames
     nodes_gdf, edges_gdf = osm.get_network(network_type="walking", nodes=True)
 
-    # converting it to NetworkX graph
-    G = osm.to_graph(nodes_gdf, edges_gdf, network_type="walking")
+    # Use graph_type="networkx" to get a NetworkX MultiDiGraph directly
+    G = osm.to_graph(nodes_gdf, edges_gdf, graph_type="networkx")
 
-    # metric system projection
+    # Set WGS84 CRS so OSMnx knows how to project it
+    G.graph["crs"] = "EPSG:4326"
+
+    # Project to local metric system EPSG:32632
     G_projected = ox.project_graph(G, to_crs=LOCAL_CRS)
 
-    # default walking speed is 4.5 km/h
-    # travel times are in seconds 
+    # Add default walking speeds and travel times
     G_projected = ox.add_edge_speeds(G_projected, fallback=4.5)
     G_projected = ox.add_edge_travel_times(G_projected)
 
-    # converting back to projected GeoDataFrames 
-    nodes_projected, edges_projected = ox.graph_to_gdfs(G_projected)
+    print(
+        f" Loaded {len(G_projected.nodes):,} nodes and {len(G_projected.edges):,} edges from local .pbf."
+    )
+    return G_projected
 
-    print("\n--- Step 1 Execution Complete ---")
-    print(f"Loaded {len(nodes_projected):,} nodes and {len(edges_projected):,} edges.")
-    print(f"Coordinate Reference System: {edges_projected.crs}")
+
+if __name__ == "__main__":
+    extract_turin_graph()

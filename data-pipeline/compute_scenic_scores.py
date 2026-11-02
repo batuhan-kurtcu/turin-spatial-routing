@@ -223,4 +223,23 @@ def compute_graph_scenic_scores(
 
 
 if __name__ == "__main__":
-    print(f"Scoring pipeline module ready using PostGIS URI: {DEFAULT_DB_URI}")
+    import os
+    import osmnx as ox
+    from extract_osm import extract_turin_graph
+
+    print("📂 Step 1: Extracting graph from local PBF file...")
+    G = extract_turin_graph()
+
+    print("⚙️ Step 2: Querying PostGIS and computing spatial scenic scores...")
+    G = compute_graph_scenic_scores(G)
+
+    # Save final graphml file to data folder
+    os.makedirs("data", exist_ok=True)
+    output_path = "data/turin_scenic_scored.graphml"
+
+    print(f"📦 Step 3: Saving scored graph to {output_path}...")
+    ox.save_graphml(G, output_path)
+
+    print(
+        "✅ Local graph pipeline complete! `data/turin_scenic_scored.graphml` generated."
+    )
