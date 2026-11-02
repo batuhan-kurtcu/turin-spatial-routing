@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turin Scenic Spatial Router</title>
+
+  <!-- Leaflet CSS -->
+  <link 
+    rel="stylesheet" 
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+  />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; height: 100vh; }
+    
+    #sidebar {
+      width: 320px;
+      padding: 20px;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
+
+    h2 { font-size: 1.2rem; color: #89b4fa; }
+    p { font-size: 0.85rem; color: #a6adc8; line-height: 1.4; }
+
+    .btn {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-shortest { background: #f38ba8; color: #11111b; }
+    .btn-shortest:hover { background: #e06c88; }
+
+    .btn-scenic { background: #a6e3a1; color: #11111b; }
+    .btn-scenic:hover { background: #8bd486; }
+
+    .btn-clear { background: #45475a; color: #cdd6f4; }
+    .btn-clear:hover { background: #585b70; }
+
+    #info {
+      margin-top: auto;
+      padding: 12px;
+      background: #313244;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+
+    #map { flex-grow: 1; height: 100%; }
+  </style>
+</head>
+<body>
+
+  <div id="sidebar">
+    <h2>🗺️ Turin Router</h2>
+    <p>Click anywhere on the map to set <strong>Start</strong> and <strong>Destination</strong> markers.</p>
+
+    <button id="btn-shortest" class="btn btn-shortest" disabled>Compute Shortest Route</button>
+    <button id="btn-scenic" class="btn btn-scenic" disabled>Compute Scenic Route</button>
+    <button id="btn-clear" class="btn btn-clear">Clear Markers</button>
+    <hr style="border: 0; border-top: 1px solid #45475a; margin: 10px 0;">
+
+    <h3>🎲 Scenic Explorations</h3>
+    <label for="time-limit" style="font-size: 0.85rem;">Max Duration: <span id="time-val">30</span> mins</label>
+    <input type="range" id="time-limit" min="15" max="60" step="5" value="30" style="width: 100%; margin-top: 5px;" oninput="document.getElementById('time-val').innerText = this.value">
+
+    <div style="display: flex; gap: 8px; margin-top: 10px;">
+      <button id="btn-loop" class="btn btn-scenic" style="flex: 1; background: #cba6f7; padding: 10px 5px;">🔄 Loop Walk</button>
+      <button id="btn-random" class="btn btn-scenic" style="flex: 1; background: #f9e2af; color: #11111b; padding: 10px 5px;">🎲 Random Walk</button>
+    </div>
+    <div id="info">Status: Select Start Point on map.</div>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // Initialize Leaflet map centered on Turin
+    const map = L.map('map').setView([45.0677, 7.6824], 14);
+
+    // OpenStreetMap dark theme tile layer
+    // Standard Free Tile Layer (No API key needed)
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    let startMarker = null;
+    let endMarker = null;
+    let currentPolyline = null;
+
+    const infoBox = document.getElementById('info');
+    const btnShortest = document.getElementById('btn-shortest');
+    const btnScenic = document.getElementById('btn-scenic');
+    const btnClear = document.getElementById('btn-clear');
+    const btnLoop = document.getElementById('btn-loop');
+    const btnRandom = document.getElementById('btn-random');
+
+    btnLoop.addEventListener('click', async () => {
+      if (!startMarker) {
+        infoBox.innerHTML = "❌ Please select a Start Point on the map first!";
+        return;
+      }
+
+      const lat = startMarker.getLatLng().lat;
+      const lon = startMarker.getLatLng().lng;
+      const maxTime = document.getElementById('time-limit').value;
+
+      infoBox.innerHTML = `⏳ Computing circular scenic loop (max ${maxTime} mins)...`;
+
+      try {
+        const res = await fetch(`http://127.0.0.1:5000/api/scenic-loop?lat=${lat}&lon=${lon}&max_time=${maxTime}`);
+        const data = await res.json();
+
+        if (data.status === 'success' && data.loops.length > 0) {
+          const bestLoop = data.loops[0];
+
+          if (currentPolyline) map.removeLayer(currentPolyline);
+          currentPolyline = L.polyline(bestLoop.coordinates, { color: '#cba6f7', weight: 5, opacity: 0.85 }).addTo(map);
+          map.fitBounds(currentPolyline.getBounds(), { padding: [30, 30] });
+
+          infoBox.innerHTML = `
+            <div style="line-height: 1.6;">
+              <strong style="color: #cba6f7; text-transform: uppercase;">Scenic Circular Walk</strong><br>
+              📏 <strong>Distance:</strong> ${bestLoop.distance_km} km<br>
+              ⏱️ <strong>Est. Duration:</strong> ${bestLoop.time_min} mins (Max: ${maxTime}m)<br>
+              📍 <strong>Nodes:</strong> ${bestLoop.total_nodes}
+            </div>
+          `;
+        } else {
+          infoBox.innerHTML = `❌ Error: ${data.message}`;
+        }
+      } catch (err) {
+        infoBox.innerHTML = "❌ Error connecting to Flask backend server.";
+        console.error(err);
+      }
+    });
+
+    btnRandom.addEventListener('click', async () => {
+      if (!startMarker) {
+        infoBox.innerHTML = "❌ Select a Start Point on the map first!";
+        return;
+      }
+
+      const lat = startMarker.getLatLng().lat;
+      const lon = startMarker.getLatLng().lng;
+      const maxTime = document.getElementById('time-limit').value;
+
+      infoBox.innerHTML = `🎲 Generating Random Scenic Walk (${maxTime} mins)...`;
+
+      try {
+        const res = await fetch(`http://127.0.0.1:5000/api/random-scenic-walk?lat=${lat}&lon=${lon}&max_time=${maxTime}`);
+        const data = await res.json();
+
+        if (data.status === 'success') {
+          if (currentPolyline) map.removeLayer(currentPolyline);
+          currentPolyline = L.polyline(data.coordinates, { color: '#f9e2af', weight: 5, opacity: 0.9 }).addTo(map);
+          map.fitBounds(currentPolyline.getBounds(), { padding: [30, 30] });
+
+          infoBox.innerHTML = `
+            <div style="line-height: 1.6;">
+              <strong style="color: #f9e2af; text-transform: uppercase;">Random Scenic Walk</strong><br>
+              📏 <strong>Distance:</strong> ${data.distance_km} km<br>
+              ⏱️ <strong>Est. Duration:</strong> ${data.time_min} mins<br>
+              📍 <strong>Nodes:</strong> ${data.total_nodes}
+            </div>
+          `;
+        } else {
+          infoBox.innerHTML = `❌ Error: ${data.message}`;
+        }
+      } catch (err) {
+        infoBox.innerHTML = "❌ Error connecting to Flask backend server.";
+        console.error(err);
+      }
+    });
+
+    // Handle map click for placing markers
+    map.on('click', function(e) {
+      const lat = e.latlng.lat;
+      const lon = e.latlng.lng;
+
+      if (!startMarker) {
+        startMarker = L.marker([lat, lon]).addTo(map).bindPopup("Start Point").openPopup();
+        infoBox.innerHTML = "Start point set! Now click for Destination.";
+      } else if (!endMarker) {
+        endMarker = L.marker([lat, lon]).addTo(map).bindPopup("Destination").openPopup();
+        infoBox.innerHTML = "Points set! Choose route mode above.";
+        btnShortest.disabled = false;
+        btnScenic.disabled = false;
+      }
+    });
+
+    // Fetch route from Flask API
+    async function fetchRoute(mode) {
+      if (!startMarker || !endMarker) return;
+
+      const startLat = startMarker.getLatLng().lat;
+      const startLon = startMarker.getLatLng().lng;
+      const endLat = endMarker.getLatLng().lat;
+      const endLon = endMarker.getLatLng().lng;
+
+      infoBox.innerHTML = `⏳ Calculating ${mode} route...`;
+
+      try {
+        const response = await fetch(
+          `http://127.0.0.1:5000/api/route?start_lat=${startLat}&start_lon=${startLon}&end_lat=${endLat}&end_lon=${endLon}&mode=${mode}`
+        );
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          if (currentPolyline) map.removeLayer(currentPolyline);
+
+          const color = mode === 'scenic' ? '#2ecc71' : '#e74c3c';
+          currentPolyline = L.polyline(data.coordinates, { color: color, weight: 5, opacity: 0.8 }).addTo(map);
+          map.fitBounds(currentPolyline.getBounds(), { padding: [30, 30] });
+
+          infoBox.innerHTML = `
+            <div style="line-height: 1.6;">
+              <strong style="color: ${color}; text-transform: uppercase;">${data.mode} Route</strong><br>
+              📏 <strong>Distance:</strong> ${data.distance_km} km<br>
+              ⏱️ <strong>Est. Walk Time:</strong> ${data.time_min} mins<br>
+              🚶 <strong>Speed:</strong> ${data.walking_speed_kmh} km/h<br>
+              📍 <strong>Nodes:</strong> ${data.total_nodes}
+            </div>
+          `;
+        } else {
+          infoBox.innerHTML = `❌ Error: ${data.message}`;
+        }
+      } catch (err) {
+        infoBox.innerHTML = "❌ Error connecting to Flask backend server.";
+        console.error(err);
+      }
+    }
+
+    btnShortest.addEventListener('click', () => fetchRoute('shortest'));
+    btnScenic.addEventListener('click', () => fetchRoute('scenic'));
+
+    btnClear.addEventListener('click', () => {
+      if (startMarker) map.removeLayer(startMarker);
+      if (endMarker) map.removeLayer(endMarker);
+      if (currentPolyline) map.removeLayer(currentPolyline);
+      startMarker = null;
+      endMarker = null;
+      currentPolyline = null;
+      btnShortest.disabled = true;
+      btnScenic.disabled = true;
+      infoBox.innerHTML = "Status: Select Start Point on map.";
+    });
+  </script>
+</body>
+</html>
