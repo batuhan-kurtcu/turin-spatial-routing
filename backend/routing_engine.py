@@ -129,7 +129,6 @@ def find_max_scenic_path_constrained_v4(
     verbose: bool = True,
 ) -> Dict[str, Any]:
     """Finds the path from start_node to target_node maximizing total scenic score
-
     while staying strictly within max_time_seconds. Features O(1) heap memory pointers,
     adaptive Pareto pruning, exact Haversine distance, and component reachability checks.
     """
@@ -140,23 +139,23 @@ def find_max_scenic_path_constrained_v4(
         print(f"   • Time Budget: {max_time_seconds}s ({round(max_time_seconds / 60.0, 1)} mins)")
         print("=" * 60)
 
-    # validating the existance
+    # validating existence
     if start_node not in G:
         return {"status": "error", "message": f"Start node {start_node} missing from graph."}
     if target_node not in G:
         return {"status": "error", "message": f"Target node {target_node} missing from graph."}
 
-    # 2. O(1) connectivity pre-screening so that we know if a route is even possible
+    # 2. O(1) connectivity pre-screening
     if component_map is not None:
         start_comp = component_map.get(start_node)
         target_comp = component_map.get(target_node)
         if start_comp is None or target_comp is None or start_comp != target_comp:
             return {
                 "status": "unreachable_target",
-                "message": f"Start and target nodes exist in disconnected network subgraphs.",
+                "message": "Start and target nodes exist in disconnected network subgraphs.",
             }
 
-    # Dynamic Pareto bucket sizing based on overall time budget/limit or whatever you would like to call
+    # Dynamic Pareto bucket sizing based on overall time budget
     adaptive_bucket_size = max(2.0, min(10.0, max_time_seconds / 120.0))
 
     # predecessor dictionary: state_id -> (parent_state_id, node_id)
@@ -164,8 +163,9 @@ def find_max_scenic_path_constrained_v4(
     predecessors: Dict[int, Tuple[Optional[int], Any]] = {state_counter: (None, start_node)}
 
     # priority queue tuple:
-    # (-total_scenic_score, elapsed_time, current_node, state_id, prev_heading, visited_landmarks)
-    pq = [(-0.0, 0.0, start_node, state_counter, None, frozenset())]
+    # (-total_scenic_score, elapsed_time, current_node, state_id, prev_heading, visited_landmarks, visited_nodes)
+    # FIX: Added frozenset({start_node}) as 7th item to track visited nodes per branch
+    pq = [(-0.0, 0.0, start_node, state_counter, None, frozenset(), frozenset({start_node}))]
 
     # Pareto records: node -> {time_bucket: best_scenic_score}
     pareto_records: Dict[Any, Dict[int, float]] = {node: {} for node in G.nodes}
@@ -187,6 +187,7 @@ def find_max_scenic_path_constrained_v4(
             state_id,
             prev_heading,
             visited_landmarks,
+            visited_nodes,  # FIX: Extracted branch visited nodes
         ) = heapq.heappop(pq)
         current_score = -neg_score
 
@@ -216,6 +217,10 @@ def find_max_scenic_path_constrained_v4(
 
         # exploring outgoing neighbors
         for neighbor in G.neighbors(current_node):
+            # FIX: Prevent backtracking or ping-ponging back to ANY node already in this branch's history
+            if neighbor in visited_nodes:
+                continue
+
             raw_edge = G.get_edge_data(current_node, neighbor)
             attr = extract_best_edge_attributes(raw_edge)
 
@@ -223,13 +228,13 @@ def find_max_scenic_path_constrained_v4(
             raw_scenic = float(attr.get("scenic_score", 0.0))
             associated_landmark = _normalize_landmark_id(attr.get("landmark_id", None))
 
-            # turn penalty to maximize the actual exploration
+            # turn penalty
             current_heading = calculate_heading(G.nodes[current_node], G.nodes[neighbor])
             turn_penalty_seconds = 0.0
             if prev_heading is not None:
                 angle_change = calculate_turn_angle(prev_heading, current_heading)
                 if angle_change > 80:
-                    turn_penalty_seconds = (angle_change / 180.0) * 8.0
+                    turn_penalty_seconds = (angle_change / 180.0) * 10.0
 
             edge_time = (length / walking_speed) + turn_penalty_seconds
             new_elapsed_time = elapsed_time + edge_time
@@ -267,6 +272,7 @@ def find_max_scenic_path_constrained_v4(
                     state_counter,
                     current_heading,
                     new_visited_landmarks,
+                    visited_nodes | {neighbor},  # FIX: Pass forward updated node history
                 ),
             )
 
@@ -298,7 +304,313 @@ def find_max_scenic_path_constrained_v4(
 
     return best_solution
 
+def get_route_from_coords(
+    G: nx.Graph,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    max_time_seconds: float = 1800.0,
+    mode: str = "scenic",
+    component_map: Optional[Dict[Any, int]] = None,
+) -> Dict[str, Any]:
+    import osmnx as ox
+    import networkx as nx
 
+    # 1. Ensure coordinate lookup happens on unprojected WGS84 degree graph
+    # If G is in EPSG:32632, unproject it to EPSG:4326 for node snapping & Lat/Lon output
+    if G.graph.get("crs") != "EPSG:4326":
+        G_deg = ox.project_graph(G, to_crs="EPSG:4326")
+    else:
+        G_deg = G
+
+    # 2. Snap Lat/Lon coordinates to nearest OSMnx nodes (X=lon, Y=lat)
+    start_node = ox.distance.nearest_nodes(G_deg, X=start_lon, Y=start_lat)
+    target_node = ox.distance.nearest_nodes(G_deg, X=end_lon, Y=end_lat)
+
+    if start_node == target_node:
+        return {
+            "status": "error",
+            "message": "Start and target snapped to the exact same node. Pick points further apart.",
+        }
+
+    WALKING_SPEED_MPS = 1.25
+
+    # 3. Pathfinding mode execution
+    if mode == "shortest":
+        try:
+            path_nodes = nx.shortest_path(
+                G, start_node, target_node, weight="length"
+            )
+            status = "success"
+        except nx.NetworkXNoPath:
+            return {"status": "no_path_found", "message": "No path exists."}
+    else:
+        # PERFORMANCE OPTIMIZATION: Compute shortest distance first to dynamically budget scenic search time
+        try:
+            shortest_nodes = nx.shortest_path(G, start_node, target_node, weight="length")
+            shortest_length = sum(
+                float(G[shortest_nodes[i]][shortest_nodes[i+1]][0].get("length", 0.0))
+                for i in range(len(shortest_nodes) - 1)
+            )
+            shortest_time = shortest_length / WALKING_SPEED_MPS
+            # Allow scenic route up to 30% longer than shortest path
+            dynamic_budget = max(shortest_time * 1.30, 300.0)
+        except nx.NetworkXNoPath:
+            dynamic_budget = max_time_seconds
+
+        res = find_max_scenic_path_constrained_v4(
+            G=G,
+            start_node=start_node,
+            target_node=target_node,
+            max_time_seconds=dynamic_budget,
+            walking_speed=WALKING_SPEED_MPS,
+            component_map=component_map,
+            verbose=False,
+        )
+        if res.get("status") != "success":
+            return res
+        path_nodes = res["path"]
+        status = res["status"]
+
+    # 4. Extract degrees (lat, lon) coordinates for Leaflet
+    # Remove consecutive duplicate nodes or micro-backtracking
+    clean_path_nodes = []
+    for node in path_nodes:
+        if not clean_path_nodes or node != clean_path_nodes[-1]:
+            clean_path_nodes.append(node)
+
+    route_coords = []
+    total_distance_meters = 0.0
+
+    for i in range(len(clean_path_nodes)):
+        node = clean_path_nodes[i]
+        node_data = G_deg.nodes[node]
+        route_coords.append((float(node_data["y"]), float(node_data["x"])))
+
+        # Accumulate exact road segment distances
+        if i < len(clean_path_nodes) - 1:
+            next_node = clean_path_nodes[i+1]
+            edge_data = G[node][next_node][0]
+            total_distance_meters += float(edge_data.get("length", 0.0))
+
+    # Calculate metrics at 4.5 km/h (1.25 m/s)
+    total_distance_km = round(total_distance_meters / 1000.0, 2)
+    total_time_min = round((total_distance_meters / WALKING_SPEED_MPS) / 60.0, 1)
+
+    return {
+        "status": status,
+        "mode": mode,
+        "coordinates": route_coords,
+        "total_nodes": len(clean_path_nodes),
+        "distance_km": total_distance_km,
+        "time_min": total_time_min,
+        "walking_speed_kmh": 4.5,
+    }
+import random
+
+def generate_scenic_loops(
+    G: nx.Graph,
+    start_lat: float,
+    start_lon: float,
+    max_time_minutes: float,
+    walking_speed_mps: float = 1.25,
+    component_map: Optional[Dict[Any, int]] = None,
+) -> Dict[str, Any]:
+  import networkx as nx
+  import osmnx as ox
+
+  if G.graph.get("crs") != "EPSG:4326":
+    G_deg = ox.project_graph(G, to_crs="EPSG:4326")
+  else:
+    G_deg = G
+
+  start_node = ox.distance.nearest_nodes(G_deg, X=start_lon, Y=start_lat)
+  max_time_seconds = float(max_time_minutes) * 60.0
+  outbound_budget = max_time_seconds * 0.45
+
+  # 1. Dijkstra radius search up to outbound budget
+  lengths, _ = nx.single_source_dijkstra(
+      G, start_node, cutoff=outbound_budget, weight="length"
+  )
+
+  # 2. Pick candidate pivots away from origin
+  candidates = []
+  for node, dist in lengths.items():
+    if node == start_node or dist < 250:  # Enforce minimum distance
+      continue
+    scenic_sum = sum(
+        float(G[node][nbr][0].get("scenic_score", 0.0))
+        for nbr in G.neighbors(node)
+    )
+    candidates.append((scenic_sum, node))
+
+  candidates.sort(key=lambda x: x[0], reverse=True)
+  if not candidates:
+    return {
+        "status": "no_path_found",
+        "message": "Time limit too short for a non-overlapping loop.",
+    }
+
+  # 3. Outbound search
+  _, pivot_node = candidates[0]
+  outbound_res = find_max_scenic_path_constrained_v4(
+      G=G,
+      start_node=start_node,
+      target_node=pivot_node,
+      max_time_seconds=outbound_budget,
+      walking_speed=walking_speed_mps,
+      component_map=component_map,
+      verbose=False,
+  )
+
+  if outbound_res.get("status") != "success":
+    return {
+        "status": "no_path_found",
+        "message": "Could not compute outbound leg.",
+    }
+
+  out_path = outbound_res["path"]
+
+  # 4. TEMPORARILY PENALIZE OUTBOUND EDGES TO PREVENT OVERLAP
+  # Copy graph temporarily so we don't mutate global state
+  G_loop = G.copy()
+  outbound_edges = set()
+  for i in range(len(out_path) - 1):
+    u, v = out_path[i], out_path[i + 1]
+    outbound_edges.add((u, v))
+    outbound_edges.add((v, u))
+    if G_loop.has_edge(u, v):
+      # Inflate length penalty on outbound edges to force return on parallel streets
+      for key in G_loop[u][v]:
+        G_loop[u][v][key]["length"] = (
+            float(G_loop[u][v][key].get("length", 10.0)) * 10.0
+        )
+        G_loop[u][v][key]["scenic_score"] = 0.0
+
+  # 5. Return search on modified graph
+  return_res = find_max_scenic_path_constrained_v4(
+      G=G_loop,
+      start_node=pivot_node,
+      target_node=start_node,
+      max_time_seconds=max_time_seconds * 0.55,
+      walking_speed=walking_speed_mps,
+      component_map=component_map,
+      verbose=False,
+  )
+
+  if return_res.get("status") != "success":
+    # Fallback to shortest return path if constrained search gets trapped
+    try:
+      ret_path = nx.shortest_path(
+          G_loop, pivot_node, start_node, weight="length"
+      )
+    except nx.NetworkXNoPath:
+      return {
+          "status": "no_path_found",
+          "message": "Could not form a non-overlapping return path.",
+      }
+  else:
+    ret_path = return_res["path"]
+
+  # Merge paths seamlessly
+  full_path = out_path + ret_path[1:]
+
+  # Compute metrics
+  total_dist_m = sum(
+      float(G[full_path[i]][full_path[i + 1]][0].get("length", 0.0))
+      for i in range(len(full_path) - 1)
+      if G.has_edge(full_path[i], full_path[i + 1])
+  )
+
+  route_coords = [
+      (float(G_deg.nodes[n]["y"]), float(G_deg.nodes[n]["x"]))
+      for n in full_path
+  ]
+
+  return {
+      "status": "success",
+      "mode": "scenic_loop",
+      "loops": [{
+          "coordinates": route_coords,
+          "total_nodes": len(full_path),
+          "distance_km": round(total_dist_m / 1000.0, 2),
+          "time_min": round((total_dist_m / walking_speed_mps) / 60.0, 1),
+      }],
+  }
+
+def generate_random_scenic_walk(
+    G: nx.Graph,
+    start_lat: float,
+    start_lon: float,
+    max_time_minutes: float,
+    walking_speed_mps: float = 1.25,
+    component_map: Optional[Dict[Any, int]] = None,
+) -> Dict[str, Any]:
+    """Generates a random one-way scenic walk terminating at a scenic target node."""
+    import networkx as nx
+    import osmnx as ox
+
+    if G.graph.get("crs") != "EPSG:4326":
+        G_deg = ox.project_graph(G, to_crs="EPSG:4326")
+    else:
+        G_deg = G
+
+    start_node = ox.distance.nearest_nodes(G_deg, X=start_lon, Y=start_lat)
+    max_time_seconds = float(max_time_minutes) * 60.0
+
+    # 1. Find nodes reachable near target walk duration (between 70% and 100% of max time)
+    min_dist_m = max_time_seconds * walking_speed_mps * 0.70
+    max_dist_m = max_time_seconds * walking_speed_mps
+
+    lengths, _ = nx.single_source_dijkstra(G, start_node, cutoff=max_dist_m, weight="length")
+
+    candidate_targets = [
+        node for node, dist in lengths.items()
+        if min_dist_m <= dist <= max_dist_m
+    ]
+
+    if not candidate_targets:
+        # Fallback to furthest reachable node
+        candidate_targets = sorted(lengths.keys(), key=lambda n: lengths[n], reverse=True)[:10]
+
+    # 2. Select a random target node from the top 10 scenic candidates in range
+    candidate_scores = []
+    for n in candidate_targets:
+        scenic_score = sum(float(G[n][nbr][0].get("scenic_score", 0.0)) for nbr in G.neighbors(n))
+        candidate_scores.append((scenic_score, n))
+    
+    candidate_scores.sort(key=lambda x: x[0], reverse=True)
+    top_candidates = candidate_scores[:10]
+    
+    _, target_node = random.choice(top_candidates)
+
+    # 3. Compute scenic path to selected random target
+    res = find_max_scenic_path_constrained_v4(
+        G=G, start_node=start_node, target_node=target_node,
+        max_time_seconds=max_time_seconds, walking_speed=walking_speed_mps,
+        component_map=component_map, verbose=False
+    )
+
+    if res.get("status") != "success":
+        return res
+
+    path_nodes = res["path"]
+    total_dist_m = sum(
+        float(G[path_nodes[i]][path_nodes[i+1]][0].get("length", 0.0))
+        for i in range(len(path_nodes) - 1)
+    )
+
+    route_coords = [(float(G_deg.nodes[n]["y"]), float(G_deg.nodes[n]["x"])) for n in path_nodes]
+
+    return {
+        "status": "success",
+        "mode": "random_scenic_walk",
+        "coordinates": route_coords,
+        "total_nodes": len(path_nodes),
+        "distance_km": round(total_dist_m / 1000.0, 2),
+        "time_min": round((total_dist_m / walking_speed_mps) / 60.0, 1)
+    }
 # Dummy graph for testing purposes
 
 if __name__ == "__main__":
