@@ -10,10 +10,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_DB_URI = os.getenv(
-    "POSTGIS_URI", 
-    "postgresql://postgres:postgres@127.0.0.1:5432/turin_map"
-)
+
+def get_default_db_uri() -> str:
+    """Builds PostgreSQL connection URI from environment variables."""
+    if os.getenv("POSTGIS_URI"):
+        return os.getenv("POSTGIS_URI")
+    user = os.getenv("POSTGRES_USER", "postgres")
+    password = os.getenv("POSTGRES_PASSWORD", "postgres")
+    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    db = os.getenv("POSTGRES_DB", "postgres")
+    return f"postgresql://{user}:{password}@{host}:{port}/{db}"
+
+
+DEFAULT_DB_URI = get_default_db_uri()
 
 #exponential decay with lambda values for every size category
 #it feels good to use things i learned at lectures finally
@@ -24,11 +34,6 @@ DECAY_PARAMS = {
 }
 
 MAX_DECAY_RADIUS = 350.0  #upper bound of decays
-
-DEFAULT_DB_URI = os.getenv(
-    "POSTGIS_URI", 
-    "postgresql://postgres:postgres@127.0.0.1:5432/turin_map"
-)
 
 #.-.-.-.-.-.-.-.-.-.-.
 #postgis data loading

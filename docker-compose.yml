@@ -13,6 +13,7 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgis_data:/var/lib/postgresql/data
+      - ./data-pipeline/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
     restart: unless-stopped
 
 volumes:

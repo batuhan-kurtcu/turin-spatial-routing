@@ -5,6 +5,7 @@
       "category": "monument",
       "size_category": "large",
       "base_score": 5.0,
+      "height": 167.5,
       "lat": 45.0689,
       "lon": 7.6931
     },
@@ -13,6 +14,7 @@
       "category": "historic_building",
       "size_category": "large",
       "base_score": 4.8,
+      "height": 30.0,
       "lat": 45.0709,
       "lon": 7.6857
     },
@@ -21,6 +23,7 @@
       "category": "historic_building",
       "size_category": "large",
       "base_score": 4.8,
+      "height": 35.0,
       "lat": 45.0722,
       "lon": 7.6860
     },
@@ -28,7 +31,8 @@
       "name": "Galleria Subalpina",
       "category": "arcade",
       "size_category": "medium",
-      "base_score": 4.6,
+      "base_score": 5.0,
+      "height": 18.0,
       "lat": 45.0694,
       "lon": 7.6860
     },
@@ -37,6 +41,7 @@
       "category": "arcade",
       "size_category": "medium",
       "base_score": 4.5,
+      "height": 18.0,
       "lat": 45.0681,
       "lon": 7.6828
     },
@@ -44,9 +49,37 @@
       "name": "Monumento a Emanuele Filiberto",
       "category": "statue",
       "size_category": "small",
-      "base_score": 3.8,
+      "base_score": 5.0,
+      "height": 10.0,
       "lat": 45.0664,
       "lon": 7.6825
+    },
+    {
+      "name": "Arco monumentale all'Arma di Artiglieria",
+      "category": "statue",
+      "size_category": "small",
+      "base_score": 3.8,
+      "height": 12.0,
+      "lat": 45.058284,
+      "lon": 7.69058
+    },
+    {
+      "name": "Castello del Valentino",
+      "category": "castle",
+      "size_category": "large",
+      "base_score": 5.0,
+      "height": 25.0,
+      "lat": 45.054053,
+      "lon": 7.686911
+    },
+    {
+      "name": "Ponte Umberto I",
+      "category": "bridge",
+      "size_category": "large",
+      "base_score": 4.5,
+      "height": 8.0,
+      "lat": 45.058032,
+      "lon": 7.692007
     }
   ],
   "featured_streets": {
